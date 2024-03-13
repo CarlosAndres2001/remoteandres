@@ -1,0 +1,37 @@
+name: Deploy
+
+on: [workflow_dispatch]
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+      
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Hugo
+        uses: peaceiris/actions-hugo@v2
+        with:
+          hugo-version: 'latest'
+
+      - name: Add SSH key to agent
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.SK }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan ${{ secrets.HOST }} >> ~/.ssh/known_hosts
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_rsa
+
+      - name: Build
+        run: |
+          sudo apt update -y
+          sudo apt install -y git
+          git clone https://github.com/matcornic/hugo-theme-learn themes/hugo-theme-learn --depth=1
+          hugo --minify
+          cd public; tar czf x *
+          scp x ${{ secrets.NAME }}@${{ secrets.HOST }}:/tmp/
+          ssh ${{ secrets.NAME }}@${{ secrets.HOST }} "sudo rm -rf /var/www/html/rustdesk.com/docs/* && sudo tar xzf /tmp/x -C /var/www/html/rustdesk.com/docs/ && /bin/rm /tmp/x && sudo chown www-data:www-data /var/www/html/rustdesk.com/docs/ -R"
